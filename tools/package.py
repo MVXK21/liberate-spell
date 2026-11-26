@@ -6,7 +6,7 @@ OpenMW Launcher both recognize it as a data folder.
 import os
 import zipfile
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 MOD = os.path.join(ROOT, 'mod')
 DIST = os.path.join(ROOT, 'dist')

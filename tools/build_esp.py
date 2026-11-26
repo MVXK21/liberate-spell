@@ -1,4 +1,4 @@
-"""Builds mod/LiberateSpell.esp (dialogue + token item) for the Liberate Spell mod.
+"""Builds mod/LiberateSpell.esp (dialogue + a global variable) for the Liberate Spell mod.
 
 Run:  python tools/build_esp.py [path-to-Morrowind.esm]
 The master path is only used to record Morrowind.esm's file size in the header.
@@ -11,15 +11,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', 'mod', 'LiberateSpell.esp')
 DEFAULT_MASTER = r'D:\Steam\steamapps\common\Morrowind\Data Files\Morrowind.esm'
 
-TOKEN = 'liberate_token'
+# Set to 1 by global.lua while a Liberate spell is in effect; 0 otherwise.
+ACTIVE_GLOBAL = 'liberatespell_active'
 CHOICE_FREE = 71
 CHOICE_WAIT = 72
+
+# Slaves whose freedom is tied to a quest. Keep in sync with EXCLUDED in global.lua.
+EXCLUDED = ['eleedal_lei', 'dahleena', 'hides_his_foot', 'llaals ores']
 
 # First vanilla INFO in each dialogue; our entries are linked in front of them.
 VANILLA_HEAD = {
     'go free': '199641425381905494',
     'Greeting 0': '1224319899288117550',
 }
+
+MAX_CONDITIONS = 6  # hard limit per dialogue response in the ESM format
 
 
 def zstr(s):
@@ -43,15 +49,22 @@ def cond_local(var, op, value):
     return ('3', 'sX', op, var, value)
 
 
-def cond_item(item, op, value):
-    return ('5', 'IX', op, item, value)
+def cond_global(var, op, value):
+    return ('2', 'sX', op, var, value)
 
 
 def cond_choice(value):
     return ('1', '50', '==', '', value)
 
 
+def cond_not_id(actor_id):
+    # The engine ignores the comparison for "Not" conditions; vanilla writes "== 1".
+    return ('7', 'XX', '==', actor_id, 1)
+
+
 def conditions(conds):
+    if len(conds) > MAX_CONDITIONS:
+        raise ValueError(f'{len(conds)} conditions; the format allows {MAX_CONDITIONS}')
     out = []
     for i, (kind, func, op, name, value) in enumerate(conds):
         text = f'{i}{kind}{func}{COMP[op]}{name}'
@@ -95,13 +108,14 @@ def dialogue(name, dial_type, entries):
 
 # --- content -------------------------------------------------------------
 UNFREED = cond_local('slaveStatus', '<', 3)
-HAS_TOKEN = cond_item(TOKEN, '>=', 1)
+SPELL_ACTIVE = cond_global(ACTIVE_GLOBAL, '==', 1)
+NOT_QUEST_SLAVE = [cond_not_id(actor) for actor in EXCLUDED]
 
 FREE_RESULT = [
     'Set slaveStatus to 3',
     'Set FreedSlavesCounter to FreedSlavesCounter + 1',
+    f'Set {ACTIVE_GLOBAL} to 0',
     'ModDisposition 50',
-    f'Player->RemoveItem "{TOKEN}" 1',
     'PlaySound "alteration hit"',
 ]
 
@@ -109,26 +123,28 @@ GREETINGS = [
     {
         'race': 'Khajiit',
         'text': "Your magic... %Name can feel it on these bracers! Will you let %Name go free?",
-        'conds': [UNFREED, HAS_TOKEN],
+        'conds': [UNFREED, SPELL_ACTIVE] + NOT_QUEST_SLAVE,
         'result': ['AddTopic "go free"'],
     },
     {
         'text': "Your magic... I can feel it working on these bracers! Will you let me go free?",
-        'conds': [UNFREED, HAS_TOKEN],
+        'conds': [UNFREED, SPELL_ACTIVE] + NOT_QUEST_SLAVE,
         'result': ['AddTopic "go free"'],
     },
 ]
 
+# The two responses to the choice only follow our own prompt, so they don't
+# need the spell check; that leaves room for the quest-slave exclusions.
 GO_FREE = [
     {
         'race': 'Khajiit',
         'text': "The bracers fall away! %Name is free! Thank you, %PCName. Khajiit will not forget this.",
-        'conds': [cond_choice(CHOICE_FREE), UNFREED],
+        'conds': [cond_choice(CHOICE_FREE), UNFREED] + NOT_QUEST_SLAVE,
         'result': FREE_RESULT,
     },
     {
         'text': "The bracers fall away! I'm free! Thank you, %PCName. I will never forget this.",
-        'conds': [cond_choice(CHOICE_FREE), UNFREED],
+        'conds': [cond_choice(CHOICE_FREE), UNFREED] + NOT_QUEST_SLAVE,
         'result': FREE_RESULT,
     },
     {
@@ -137,19 +153,17 @@ GO_FREE = [
     },
     {
         'text': "Your spell has weakened the enchantment on these bracers. Will you set me free?",
-        'conds': [UNFREED, HAS_TOKEN],
+        'conds': [UNFREED, SPELL_ACTIVE] + NOT_QUEST_SLAVE,
         'result': [f'Choice "Break the bracers\' enchantment." {CHOICE_FREE} "Not yet." {CHOICE_WAIT}'],
     },
 ]
 
 
-def token_item():
-    return record('MISC', [
-        sub('NAME', zstr(TOKEN)),
-        sub('MODL', zstr(r'm\Key_Standard_01.NIF')),
-        sub('FNAM', zstr('Liberate (spell effect)')),
-        sub('MCDT', struct.pack('<fii', 0.0, 0, 0)),
-        sub('ITEX', zstr(r'm\Tx_key_standard_01.tga')),
+def active_global():
+    return record('GLOB', [
+        sub('NAME', zstr(ACTIVE_GLOBAL)),
+        sub('FNAM', b's'),
+        sub('FLTV', struct.pack('<f', 0.0)),
     ])
 
 
@@ -168,7 +182,7 @@ def header(num_records, master_size):
 def main():
     master = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MASTER
     master_size = os.path.getsize(master) if os.path.exists(master) else 79837557
-    recs = [token_item()]
+    recs = [active_global()]
     recs += dialogue('Greeting 0', 'greeting', GREETINGS)
     recs += dialogue('go free', 'topic', GO_FREE)
     data = header(len(recs), master_size) + b''.join(recs)

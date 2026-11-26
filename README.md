@@ -11,7 +11,7 @@ Liberate is sold by **Imperial Cult members who sell spells**. In vanilla Morrow
 | | |
 |---|---|
 | School | Alteration |
-| Range | Target or touch |
+| Range | Target |
 | Cost | 15 magicka |
 | Duration | 5 seconds |
 
@@ -51,10 +51,10 @@ You can also add the folder and tick both files in the OpenMW Launcher.
 
 - `scripts/liberatespell/load.lua` creates the Liberate magic effect (based on Open) and the spell.
 - `scripts/liberatespell/npc.lua` notices when the effect hits an NPC, and adds the spell to Imperial Cult spell merchants.
-- `scripts/liberatespell/global.lua` checks that the target is an unfreed slave, then gives the player a hidden token item for 60 seconds of game time.
-- `LiberateSpell.esp` adds greeting and **go free** dialogue that appears while you hold the token. Choosing to free the slave sets their `slaveStatus` to 3, the same as the vanilla key dialogue.
+- `scripts/liberatespell/global.lua` checks that the target is an unfreed slave, then sets the global variable `liberatespell_active` to 1 for about a minute of play. The timer pauses while you're in menus or dialogue.
+- `LiberateSpell.esp` defines that global and adds greeting and **go free** dialogue that appears while it's set. Choosing to free the slave sets their `slaveStatus` to 3, the same as the vanilla key dialogue, and turns the global off.
 
-While the spell is active, the token shows in your inventory as "Liberate (spell effect)". The dialogue option isn't tied to the slave you cast on: if you talk to a different slave within the minute, that one gets the option instead.
+The dialogue option isn't tied to the slave you cast on: if you talk to a different ordinary slave within the minute, that one gets the option instead. Quest slaves never get it.
 
 ## Building from source
 
