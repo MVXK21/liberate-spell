@@ -1,0 +1,4 @@
+LOAD: scripts/liberatespell/load.lua
+GLOBAL: scripts/liberatespell/global.lua
+NPC: scripts/liberatespell/npc.lua
+PLAYER: scripts/liberatespell/player.lua
